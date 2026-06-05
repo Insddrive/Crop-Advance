@@ -39,13 +39,48 @@
 
         #canvas-wrapper { position: relative; margin-top: 20px; display: inline-block; width: 100%; }
         
-        /* touch-action ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਤਾਂ ਜੋ ਬ੍ਰਾਊਜ਼ਰ ਦਾ ਜ਼ੂਮ ਕੰਮ ਕਰ ਸਕੇ */
         #canvas { max-width: 100%; height: auto; display: block; border-radius: 10px; cursor: crosshair; background: #eee; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         
         #outputCanvas { display: none; margin-top: 20px; border: 3px solid #28a745; border-radius: 12px; max-width: 100%; height: auto; margin: 0 auto; }
+
+        /* 🔥 ਨਵਾਂ ਫਿਕਸਡ ਜ਼ੂਮ ਗੋਲਾ (Top Fixed Magnifier) 🔥 */
+        #magnifier-container {
+            position: fixed; /* ਸਕ੍ਰੀਨ ਦੇ ਉੱਪਰ ਟਿਕਿਆ ਰਹੇਗਾ */
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 160px; /* ਵੱਡਾ ਸਾਈਜ਼ */
+            height: 160px;
+            border: 4px solid #007bff; /* ਨੀਲਾ ਬਾਰਡਰ */
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            display: none; /* ਸ਼ੁਰੂ ਵਿੱਚ ਲੁਕਿਆ ਹੋਇਆ */
+            z-index: 9999;
+            pointer-events: none; /* ਟੱਚ ਨੂੰ ਨਹੀਂ ਰੋਕੇਗਾ */
+            overflow: hidden;
+        }
+
+        #magCanvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+        }
+
+        /* ਗੋਲੇ ਦੇ ਵਿਚਕਾਰ ਲਾਲ Crosshair */
+        .crosshair-h { position: absolute; top: 50%; left: 10%; width: 80%; height: 2px; background: rgba(255,0,0,0.7); transform: translateY(-50%); }
+        .crosshair-v { position: absolute; top: 10%; left: 50%; width: 2px; height: 80%; background: rgba(255,0,0,0.7); transform: translateX(-50%); }
+        .crosshair-center { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: red; border-radius: 50%; transform: translate(-50%, -50%); }
     </style>
 </head>
 <body>
+
+<div id="magnifier-container">
+    <canvas id="magCanvas" width="200" height="200"></canvas>
+    <div class="crosshair-h"></div>
+    <div class="crosshair-v"></div>
+    <div class="crosshair-center"></div>
+</div>
 
 <div class="app-container">
     <h2>📸 HD Precision Crop</h2>
@@ -83,6 +118,10 @@
     const outputCanvas = document.getElementById('outputCanvas');
     const ctx = canvas.getContext('2d');
     
+    const magnifierContainer = document.getElementById('magnifier-container');
+    const magCanvas = document.getElementById('magCanvas');
+    const magCtx = magCanvas.getContext('2d');
+
     const uploadInput = document.getElementById('upload');
     const cropBtn = document.getElementById('cropBtn');
     const downloadBtn = document.getElementById('downloadBtn');
@@ -128,7 +167,7 @@
                 canvas.style.display = 'block';
                 cropBtn.style.display = 'inline-block';
                 downloadBtn.style.display = 'none';
-                instructions.innerText = "ਨੀਲੇ ਬਿੰਦੂਆਂ ਨੂੰ ਖਿੱਚੋ। ਦੋ ਉਂਗਲਾਂ ਨਾਲ ਜ਼ੂਮ ਕਰਕੇ ਚੈੱਕ ਵੀ ਕਰ ਸਕਦੇ ਹੋ।";
+                instructions.innerText = "ਹੈਂਡਲ ਨੂੰ ਖਿੱਚੋ, ਸਕ੍ਰੀਨ ਦੇ ਉੱਪਰਲੇ ਗੋਲੇ ਵਿੱਚ ਤੁਹਾਨੂੰ ਸਾਫ਼ ਜ਼ੂਮ ਦਿਸੇਗਾ।";
                 draw();
             };
             sourceImage.src = event.target.result;
@@ -139,7 +178,7 @@
     function getInnerHandles() {
         let cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
         let cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
-        let offsetDistance = Math.max(50, canvas.width * 0.08); 
+        let offsetDistance = Math.max(60, canvas.width * 0.08); 
         
         return points.map(p => {
             let dx = cx - p.x;
@@ -160,12 +199,11 @@
             ctx.moveTo(points[0].x, points[0].y);
             for (let i = 1; i < 4; i++) ctx.lineTo(points[i].x, points[i].y);
             ctx.closePath();
-            ctx.lineWidth = Math.max(4, canvas.width * 0.005);
+            ctx.lineWidth = Math.max(5, canvas.width * 0.006);
             ctx.strokeStyle = '#00ff00';
             ctx.stroke();
 
             let innerHandles = getInnerHandles();
-            let magRadius = Math.max(50, canvas.width * 0.07); 
 
             for (let i = 0; i < 4; i++) {
                 let p = points[i];
@@ -175,56 +213,44 @@
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y);
                 ctx.lineTo(grabP.x, grabP.y);
-                ctx.lineWidth = Math.max(3, canvas.width * 0.004);
+                ctx.lineWidth = Math.max(4, canvas.width * 0.005);
                 ctx.strokeStyle = '#00ff00';
                 ctx.stroke();
 
-                // 3. ਅੰਦਰਲਾ ਨੀਲਾ ਹੈਂਡਲ (ਫੜਨ ਲਈ)
+                // 3. ਅਸਲ ਕਿਨਾਰੇ 'ਤੇ ਛੋਟਾ ਹਰਾ ਬਿੰਦੂ
                 ctx.beginPath();
-                ctx.arc(grabP.x, grabP.y, Math.max(20, canvas.width * 0.03), 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, Math.max(8, canvas.width * 0.01), 0, Math.PI * 2);
+                ctx.fillStyle = '#00ff00';
+                ctx.fill();
+
+                // 4. ਅੰਦਰਲਾ ਨੀਲਾ ਹੈਂਡਲ (ਉਂਗਲ ਨਾਲ ਫੜਨ ਲਈ)
+                ctx.beginPath();
+                ctx.arc(grabP.x, grabP.y, Math.max(25, canvas.width * 0.035), 0, Math.PI * 2);
                 ctx.fillStyle = '#007bff';
                 ctx.fill();
-                ctx.lineWidth = Math.max(3, canvas.width * 0.004);
+                ctx.lineWidth = Math.max(4, canvas.width * 0.005);
                 ctx.strokeStyle = 'white';
                 ctx.stroke();
-
-                // 4. ਜ਼ੂਮ ਲੈਨਜ਼ (ਸਿਰਫ ਉਦੋਂ ਜਦੋਂ ਉਂਗਲ ਨਾਲ ਖਿੱਚਿਆ ਜਾ ਰਿਹਾ ਹੋਵੇ)
-                if (draggingPoint === i) {
-                    ctx.save();
-                    
-                    // ਗੋਲੇ ਨੂੰ ਉਂਗਲ ਤੋਂ ਉੱਪਰ ਅਤੇ ਖੱਬੇ ਪਾਸੇ ਰੱਖਣਾ
-                    let magX = p.x - magRadius * 1.8; 
-                    let magY = p.y - magRadius * 2.5; 
-
-                    // ਜੇਕਰ ਗੋਲਾ ਸਕ੍ਰੀਨ ਦੇ ਬਾਹਰ (ਉੱਪਰ ਜਾਂ ਖੱਬੇ) ਜਾ ਰਿਹਾ ਹੈ ਤਾਂ ਇਸਦੀ ਜਗ੍ਹਾ ਬਦਲੋ
-                    if (magX - magRadius < 0) magX = p.x + magRadius * 1.8;
-                    if (magY - magRadius < 0) magY = p.y + magRadius * 2.5;
-
-                    ctx.beginPath();
-                    ctx.arc(magX, magY, magRadius, 0, Math.PI * 2);
-                    ctx.lineWidth = Math.max(6, canvas.width * 0.008);
-                    ctx.strokeStyle = '#007bff'; // ਗੋਲੇ ਦਾ ਬਾਰਡਰ ਨੀਲਾ ਰੱਖਿਆ ਹੈ ਤਾਂ ਜੋ ਵੱਖਰਾ ਦਿਸੇ
-                    ctx.stroke(); 
-                    ctx.clip(); 
-                    
-                    // ਫੋਟੋ ਨੂੰ ਜ਼ੂਮ ਕਰਕੇ ਗੋਲੇ ਵਿੱਚ ਫਿੱਟ ਕਰਨਾ
-                    ctx.translate(magX, magY);
-                    ctx.scale(2.5, 2.5); 
-                    ctx.translate(-p.x, -p.y);
-                    ctx.drawImage(sourceImage, 0, 0); 
-                    ctx.restore();
-
-                    // ਗੋਲੇ ਦੇ ਵਿਚਕਾਰ ਲਾਲ Crosshair (+)
-                    ctx.beginPath();
-                    let crossSize = Math.max(10, canvas.width * 0.015);
-                    ctx.moveTo(magX - crossSize, magY); ctx.lineTo(magX + crossSize, magY);
-                    ctx.moveTo(magX, magY - crossSize); ctx.lineTo(magX, magY + crossSize);
-                    ctx.strokeStyle = '#ff0000';
-                    ctx.lineWidth = Math.max(3, canvas.width * 0.003);
-                    ctx.stroke();
-                }
             }
         }
+    }
+
+    // 🌟 ਨਵਾਂ ਫੰਕਸ਼ਨ: ਉੱਪਰਲੇ ਗੋਲੇ ਨੂੰ ਅਪਡੇਟ ਕਰਨ ਲਈ
+    function updateMagnifier() {
+        if (draggingPoint === -1) return;
+
+        let p = points[draggingPoint];
+        let magSize = magCanvas.width; // 200px
+        let zoomFactor = 2.5; // 2.5 ਗੁਣਾ ਜ਼ੂਮ
+        
+        let srcW = magSize / zoomFactor;
+        let srcH = magSize / zoomFactor;
+        let srcX = p.x - srcW / 2;
+        let srcY = p.y - srcH / 2;
+
+        magCtx.clearRect(0, 0, magSize, magSize);
+        // ਅਸੀਂ ਮੇਨ ਕੈਨਵਸ ਤੋਂ ਫੋਟੋ ਲੈ ਰਹੇ ਹਾਂ ਤਾਂ ਜੋ ਗੋਲੇ ਵਿੱਚ ਹਰੀ ਲਾਈਨ ਵੀ ਦਿਸੇ!
+        magCtx.drawImage(canvas, srcX, srcY, srcW, srcH, 0, 0, magSize, magSize);
     }
 
     function getMousePos(evt) {
@@ -240,13 +266,11 @@
 
     function startDrag(e) {
         if (e.target !== canvas || !sourceImage.src) return;
-        
-        // ਜੇਕਰ ਦੋ ਉਂਗਲਾਂ (Pinch-to-zoom) ਵਰਤੀਆਂ ਜਾ ਰਹੀਆਂ ਹਨ, ਤਾਂ ਕੋਡ ਨੂੰ ਰੋਕੋ ਅਤੇ ਬ੍ਰਾਊਜ਼ਰ ਨੂੰ ਜ਼ੂਮ ਕਰਨ ਦਿਓ
-        if (e.touches && e.touches.length > 1) return;
+        if (e.touches && e.touches.length > 1) return; // ਦੋ ਉਂਗਲਾਂ ਨਾਲ ਜ਼ੂਮ ਹੋਣ ਦਿਓ
 
         const pos = getMousePos(e);
         let innerHandles = getInnerHandles();
-        let hitRadius = Math.max(40, canvas.width * 0.05); 
+        let hitRadius = Math.max(50, canvas.width * 0.06); 
         
         for (let i = 0; i < 4; i++) {
             const dx = innerHandles[i].x - pos.x;
@@ -256,9 +280,12 @@
                 draggingPoint = i;
                 dragOffset = { x: points[i].x - innerHandles[i].x, y: points[i].y - innerHandles[i].y };
                 
-                // ਜਦੋਂ ਹੈਂਡਲ ਫੜਿਆ ਜਾਵੇ ਸਿਰਫ ਉਦੋਂ ਹੀ ਸਕ੍ਰੀਨ ਨੂੰ ਹਿੱਲਣ ਤੋਂ ਰੋਕੋ (prevent scroll)
                 if(e.cancelable) e.preventDefault(); 
-                draw(); // ਗੋਲਾ ਦਿਖਾਉਣ ਲਈ ਡਰਾਅ ਕਰੋ
+                
+                // ਉੱਪਰਲੇ ਗੋਲੇ ਨੂੰ ਦਿਖਾਓ
+                magnifierContainer.style.display = 'block';
+                draw();
+                updateMagnifier();
                 break;
             }
         }
@@ -270,14 +297,18 @@
             const pos = getMousePos(e);
             points[draggingPoint].x = pos.x + dragOffset.x;
             points[draggingPoint].y = pos.y + dragOffset.y;
+            
             draw();
+            updateMagnifier(); // ਗੋਲੇ ਅੰਦਰਲੀ ਫੋਟੋ ਅਪਡੇਟ ਕਰੋ
         }
     }
 
     function stopDrag(e) { 
         if (draggingPoint !== -1) {
             draggingPoint = -1; 
-            draw(); // ਗੋਲਾ ਹਟਾਉਣ ਲਈ ਦੁਬਾਰਾ ਡਰਾਅ ਕਰੋ
+            // ਉੱਪਰਲੇ ਗੋਲੇ ਨੂੰ ਛੁਪਾ ਦਿਓ
+            magnifierContainer.style.display = 'none';
+            draw(); 
         }
     }
 
@@ -285,7 +316,6 @@
     window.addEventListener('mousemove', drag);
     window.addEventListener('mouseup', stopDrag);
     
-    // {passive: false} ਲਗਾਉਣਾ ਜ਼ਰੂਰੀ ਹੈ ਤਾਂ ਜੋ preventDefault ਕੰਮ ਕਰੇ ਅਤੇ ਪੁਆਇੰਟ ਫੜਨ ਲੱਗਿਆਂ ਸਕ੍ਰੀਨ ਨਾ ਹਿੱਲੇ
     canvas.addEventListener('touchstart', startDrag, {passive: false});
     window.addEventListener('touchmove', drag, {passive: false});
     window.addEventListener('touchend', stopDrag);
