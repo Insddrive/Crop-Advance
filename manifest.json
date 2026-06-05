@@ -3,14 +3,12 @@
   "name": "HD Precision Crop",
   "short_name": "Crop App",
   "description": "Advance photo cropping and straightening app",
-  "start_url": "./",
+  "start_url": "./index.html",
   "display": "standalone",
-  "display_override": ["standalone", "browser", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#f0f2f5",
   "theme_color": "#007bff",
-  "prefer_related_applications": false,
-  "categories": ["photo", "utilities"],
+  "categories": ["photo", "utilities", "productivity"],
   "icons": [
     {
       "src": "icon-192.png",
