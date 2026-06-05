@@ -1,1 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HD Precision Crop</title>
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 10px; 
+            text-align: center; 
+            color: #333; 
+        }
+        .app-container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+        }
+        h2 { color: #222; font-size: 20px; margin-top: 0; margin-bottom: 20px; font-weight: 600; }
+        
+        #loading-overlay { text-align: center; font-weight: 500; margin-bottom: 20px; color: #007bff; font-size: 15px; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #007bff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .btn { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 15px; cursor: pointer; margin: 8px 4px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+        .btn:hover { background: #0056b3; }
+        .btn-success { background: #28a745; display: none; }
+        .btn-secondary { background: #6c757d; display: none; }
+        .btn-secondary:hover { background: #5a6268; }
+        
+        input[type="file"] { display: none; }
+        .custom-file-upload { display: inline-block; padding: 12px 24px; cursor: pointer; background: #495057; color: white; border-radius: 8px; font-size: 15px; margin: 8px 4px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+        
+        #controls { display: none; }
+
+        #canvas-wrapper { position: relative; margin-top: 15px; display: inline-block; width: 100%; }
+        
+        #canvas { max-width: 100%; height: auto; display: block; border-radius: 8px; cursor: crosshair; background: #f8f9fa; margin: 0 auto; border: 1px solid #dee2e6; }
+        
+        #outputCanvas { display: none; margin-top: 15px; border: 2px solid #28a745; border-radius: 8px; max-width: 100%; height: auto; margin: 0 auto; }
+
+        #magnifier-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 160px;
+            height: 160px;
+            border: 3px solid #007bff;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 9999;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        #magCanvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+        }
+
+        .crosshair-h { position: absolute; top: 50%; left: 15%; width: 70%; height: 1px; background: rgba(255,0,0,0.8); transform: translateY(-50%); }
+        .crosshair-v { position: absolute; top: 15%; left: 50%; width: 1px; height: 70%; background: rgba(255,0,0,0.8); transform: translateX(-50%); }
+        .crosshair-center { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: red; border-radius: 50%; transform: translate(-50%, -50%); }
+    </style>
+</head>
+<body>
+
+<div id="magnifier-container">
+    <canvas id="magCanvas" width="200" height="200"></canvas>
+    <div class="crosshair-h"></div>
+    <div class="crosshair-v"></div>
+    <div class="crosshair-center"></div>
+</div>
+
+<div class="app-container">
+    <h2>HD Precision Crop</h2>
+    
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <span id="status-text">Loading Library...</span>
+    </div>
+    
+    <div id="controls">
+        <label class="custom-file-upload">
+            <input type="file" id="upload" accept="image/*">
+            Upload
+        </label>
+        <button id="cropBtn" class="btn" style="display: none;">Crop</button>
+        <button id="backBtn" class="btn btn-secondary">Back</button>
+        <button id="downloadBtn" class="btn btn-success">Download</button>
+    </div>
+
+    <img id="sourceImage" style="display: none;">
+
+    <div id="canvas-wrapper">
+        <canvas id="canvas"></canvas>
+    </div>
+    
+    <canvas id="outputCanvas"></canvas>
+</div>
+
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+
+<script>
+    const sourceImage = document.getElementById('sourceImage');
+    const canvas = document.getElementById('canvas');
+    const outputCanvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const magnifierContainer = document.getElementById('magnifier-container');
+    const magCanvas = document.getElementById('magCanvas');
+    const magCtx = magCanvas.getContext('2d');
+
+    const uploadInput = document.getElementById('upload');
+    const cropBtn = document.getElementById('cropBtn');
+    const backBtn = document.getElementById('backBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const controls = document.getElementById('controls');
+
+    let points = [];
+    let draggingPoint = -1;
+    let dragOffset = {x: 0, y: 0};
+
+    function waitForCv(callback) {
+        if (typeof cv !== 'undefined' && cv.Mat) { callback(); } 
+        else { setTimeout(() => waitForCv(callback), 100); }
+    }
+
+    window.onload = function() {
+        waitForCv(() => {
+            loadingOverlay.style.display = 'none';
+            controls.style.display = 'block';
+        });
+    };
+
+    uploadInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            sourceImage.onload = () => {
+                canvas.width = sourceImage.width;
+                canvas.height = sourceImage.height;
+                
+                let w = canvas.width, h = canvas.height;
+                let padX = w * 0.15, padY = h * 0.15;
+                points = [
+                    {x: padX, y: padY}, {x: w - padX, y: padY}, 
+                    {x: w - padX, y: h - padY}, {x: padX, y: h - padY}
+                ];
+                
+                outputCanvas.style.display = 'none';
+                backBtn.style.display = 'none';
+                downloadBtn.style.display = 'none';
+                
+                canvas.style.display = 'block';
+                cropBtn.style.display = 'inline-block';
+                draw();
+            };
+            sourceImage.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    function getInnerHandles() {
+        let cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
+        let cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
+        let offsetDistance = Math.max(60, canvas.width * 0.08); 
+        
+        return points.map(p => {
+            let dx = cx - p.x;
+            let dy = cy - p.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist === 0) return {x: p.x, y: p.y};
+            return { x: p.x + (dx/dist) * offsetDistance, y: p.y + (dy/dist) * offsetDistance };
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (sourceImage.src) ctx.drawImage(sourceImage, 0, 0);
+
+        if (points.length === 4) {
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < 4; i++) ctx.lineTo(points[i].x, points[i].y);
+            ctx.closePath();
+            ctx.lineWidth = Math.max(5, canvas.width * 0.006);
+            ctx.strokeStyle = '#00ff00';
+            ctx.stroke();
+
+            let innerHandles = getInnerHandles();
+
+            for (let i = 0; i < 4; i++) {
+                let p = points[i];
+                let grabP = innerHandles[i];
+
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(grabP.x, grabP.y);
+                ctx.lineWidth = Math.max(4, canvas.width * 0.005);
+                ctx.strokeStyle = '#00ff00';
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, Math.max(8, canvas.width * 0.01), 0, Math.PI * 2);
+                ctx.fillStyle = '#00ff00';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(grabP.x, grabP.y, Math.max(25, canvas.width * 0.035), 0, Math.PI * 2);
+                ctx.fillStyle = '#007bff';
+                ctx.fill();
+                ctx.lineWidth = Math.max(4, canvas.width * 0.005);
+                ctx.strokeStyle = 'white';
+                ctx.stroke();
+            }
+        }
+    }
+
+    function updateMagnifier() {
+        if (draggingPoint === -1) return;
+
+        let p = points[draggingPoint];
+        let magSize = magCanvas.width; 
+        let zoomFactor = 2.0; 
+        
+        const rect = canvas.getBoundingClientRect();
+        const scale = canvas.width / rect.width;
+
+        let srcW = (magSize / zoomFactor) * scale;
+        let srcH = (magSize / zoomFactor) * scale;
+        let srcX = p.x - srcW / 2;
+        let srcY = p.y - srcH / 2;
+
+        magCtx.clearRect(0, 0, magSize, magSize);
+        magCtx.drawImage(sourceImage, srcX, srcY, srcW, srcH, 0, 0, magSize, magSize);
+    }
+
+    function getMousePos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let clientX = evt.clientX, clientY = evt.clientY;
+        if (evt.touches && evt.touches.length > 0) {
+            clientX = evt.touches[0].clientX; clientY = evt.touches[0].clientY;
+        }
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    }
+
+    function startDrag(e) {
+        if (e.target !== canvas || !sourceImage.src) return;
+        if (e.touches && e.touches.length > 1) return; 
+
+        const pos = getMousePos(e);
+        let innerHandles = getInnerHandles();
+        let hitRadius = Math.max(50, canvas.width * 0.06); 
+        
+        for (let i = 0; i < 4; i++) {
+            const dx = innerHandles[i].x - pos.x;
+            const dy = innerHandles[i].y - pos.y;
+            
+            if (Math.sqrt(dx*dx + dy*dy) < hitRadius * 1.5) {
+                draggingPoint = i;
+                dragOffset = { x: points[i].x - innerHandles[i].x, y: points[i].y - innerHandles[i].y };
+                
+                if(e.cancelable) e.preventDefault(); 
+                
+                magnifierContainer.style.display = 'block';
+                draw();
+                updateMagnifier();
+                break;
+            }
+        }
+    }
+
+    function drag(e) {
+        if (draggingPoint !== -1) {
+            if(e.cancelable) e.preventDefault();
+            const pos = getMousePos(e);
+            points[draggingPoint].x = pos.x + dragOffset.x;
+            points[draggingPoint].y = pos.y + dragOffset.y;
+            
+            draw();
+            updateMagnifier(); 
+        }
+    }
+
+    function stopDrag(e) { 
+        if (draggingPoint !== -1) {
+            draggingPoint = -1; 
+            magnifierContainer.style.display = 'none';
+            draw(); 
+        }
+    }
+
+    canvas.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', drag);
+    window.addEventListener('mouseup', stopDrag);
+    
+    canvas.addEventListener('touchstart', startDrag, {passive: false});
+    window.addEventListener('touchmove', drag, {passive: false});
+    window.addEventListener('touchend', stopDrag);
+
+    cropBtn.addEventListener('click', () => {
+        if (typeof cv === 'undefined' || points.length !== 4) return;
+
+        cropBtn.innerText = "Processing...";
+        cropBtn.style.opacity = '0.5';
+        
+        setTimeout(() => {
+            let src = cv.imread(sourceImage);
+
+            let w1 = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+            let w2 = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y);
+            let h1 = Math.hypot(points[0].x - points[3].x, points[0].y - points[3].y);
+            let h2 = Math.hypot(points[1].x - points[2].x, points[1].y - points[2].y);
+            let maxWidth = Math.max(w1, w2);
+            let maxHeight = Math.max(h1, h2);
+
+            let dsize = new cv.Size(maxWidth, maxHeight);
+            
+            let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                points[0].x, points[0].y, points[1].x, points[1].y,
+                points[2].x, points[2].y, points[3].x, points[3].y
+            ]);
+            let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                0, 0, maxWidth, 0, maxWidth, maxHeight, 0, maxHeight
+            ]);
+
+            let M = cv.getPerspectiveTransform(srcTri, dstTri);
+            let dst = new cv.Mat();
+            
+            cv.warpPerspective(src, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+            cv.imshow('outputCanvas', dst);
+
+            src.delete(); dst.delete(); M.delete(); srcTri.delete(); dstTri.delete();
+
+            canvas.style.display = 'none';
+            cropBtn.style.display = 'none';
+            cropBtn.innerText = "Crop";
+            cropBtn.style.opacity = '1';
+            
+            // ਨਵੇਂ ਬਟਨ ਦਿਖਾਉਣਾ
+            outputCanvas.style.display = 'block';
+            backBtn.style.display = 'inline-block';
+            downloadBtn.style.display = 'inline-block';
+        }, 100);
+    });
+
+    // ਨਵਾਂ ਬੈਕ ਬਟਨ (Back Button) ਫੰਕਸ਼ਨ
+    backBtn.addEventListener('click', () => {
+        outputCanvas.style.display = 'none';
+        backBtn.style.display = 'none';
+        downloadBtn.style.display = 'none';
+        
+        canvas.style.display = 'block';
+        cropBtn.style.display = 'inline-block';
+        
+        // ਕੈਨਵਸ ਨੂੰ ਉਸੇ ਪੁਰਾਣੀ ਪੋਜੀਸ਼ਨ 'ਤੇ ਰੀਡਰਾਅ (Redraw) ਕਰਨਾ
+        draw(); 
+    });
+
+    downloadBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = 'Cropped.jpg';
+        link.href = outputCanvas.toDataURL('image/jpeg', 1.0);
+        link.click();
+    });
+</script>
+
+</body>
+</html>
 
