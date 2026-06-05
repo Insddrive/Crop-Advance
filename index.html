@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HD Precision Crop</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007bff">
+
     <style>
         body { 
             font-family: system-ui, -apple-system, sans-serif; 
@@ -352,14 +356,12 @@
             cropBtn.innerText = "Crop";
             cropBtn.style.opacity = '1';
             
-            // ਨਵੇਂ ਬਟਨ ਦਿਖਾਉਣਾ
             outputCanvas.style.display = 'block';
             backBtn.style.display = 'inline-block';
             downloadBtn.style.display = 'inline-block';
         }, 100);
     });
 
-    // ਨਵਾਂ ਬੈਕ ਬਟਨ (Back Button) ਫੰਕਸ਼ਨ
     backBtn.addEventListener('click', () => {
         outputCanvas.style.display = 'none';
         backBtn.style.display = 'none';
@@ -368,7 +370,6 @@
         canvas.style.display = 'block';
         cropBtn.style.display = 'inline-block';
         
-        // ਕੈਨਵਸ ਨੂੰ ਉਸੇ ਪੁਰਾਣੀ ਪੋਜੀਸ਼ਨ 'ਤੇ ਰੀਡਰਾਅ (Redraw) ਕਰਨਾ
         draw(); 
     });
 
@@ -380,6 +381,15 @@
     });
 </script>
 
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('Service Worker Registered'))
+                .catch(err => console.log('Service Worker Error', err));
+        });
+    }
+</script>
+
 </body>
 </html>
-
