@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Advanced Precision Crop App</title>
+    <title>HD Precision Crop App</title>
     <style>
         body { 
             font-family: system-ui, -apple-system, sans-serif; 
@@ -23,7 +23,7 @@
         }
         h2 { color: #1a1a1a; font-size: 22px; margin-top: 0; margin-bottom: 20px; }
         
-        #loading-overlay { text-align: center; font-weight: bold; margin-bottom: 20px; }
+        #loading-overlay { text-align: center; font-weight: bold; margin-bottom: 20px; color: #007bff; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 25px; height: 25px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px;}
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
@@ -35,33 +35,38 @@
         .custom-file-upload { display: inline-block; padding: 12px 20px; cursor: pointer; background: #6c757d; color: white; border-radius: 10px; font-size: 16px; margin: 8px 4px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
         
         #controls { display: none; }
-        #instructions { color: #555; font-size: 14px; margin-bottom: 15px; display: none; padding: 10px; background: #e9ecef; border-radius: 8px; }
+        #instructions { color: #555; font-size: 14px; margin-bottom: 15px; display: none; padding: 10px; background: #e9ecef; border-radius: 8px; font-weight: bold; }
 
         #canvas-wrapper { position: relative; margin-top: 20px; display: inline-block; width: 100%; }
-        #canvas { max-width: 100%; height: auto; display: block; border-radius: 10px; cursor: crosshair; touch-action: none; background: #eee; margin: 0 auto; }
-        #outputCanvas { display: none; margin-top: 20px; border: 2px solid #28a745; border-radius: 12px; max-width: 100%; height: auto; margin: 0 auto; }
+        
+        /* ਕੈਨਵਸ ਦੀ ਦਿੱਖ ਜੋ ਫੋਨ 'ਤੇ ਫਿੱਟ ਆਵੇਗੀ, ਪਰ ਅਸਲ ਕੁਆਲਿਟੀ HD ਹੀ ਰਹੇਗੀ */
+        #canvas { max-width: 100%; height: auto; display: block; border-radius: 10px; cursor: crosshair; touch-action: none; background: #eee; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        
+        #outputCanvas { display: none; margin-top: 20px; border: 3px solid #28a745; border-radius: 12px; max-width: 100%; height: auto; margin: 0 auto; }
     </style>
 </head>
 <body>
 
 <div class="app-container">
-    <h2>📸 Advanced Precision Crop</h2>
+    <h2>📸 HD Precision Crop</h2>
     
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <span id="status-text">⏳ Loading system...</span>
+        <span id="status-text">⏳ ਸਿਸਟਮ ਤਿਆਰ ਹੋ ਰਿਹਾ ਹੈ...</span>
     </div>
     
     <div id="controls">
         <label class="custom-file-upload">
             <input type="file" id="upload" accept="image/*">
-            📁 Upload Photo
+            📁 ਫੋਟੋ ਅਪਲੋਡ ਕਰੋ
         </label>
-        <button id="cropBtn" class="btn" style="display: none;">✂️ Crop & Straighten</button>
-        <button id="downloadBtn" class="btn btn-success">⬇️ Download Clean Photo</button>
+        <button id="cropBtn" class="btn" style="display: none;">✂️ HD ਕਰੋਪ ਕਰੋ</button>
+        <button id="downloadBtn" class="btn btn-success">⬇️ HD ਫੋਟੋ ਡਾਊਨਲੋਡ ਕਰੋ</button>
     </div>
 
     <p id="instructions"></p>
+
+    <img id="sourceImage" style="display: none;">
 
     <div id="canvas-wrapper">
         <canvas id="canvas"></canvas>
@@ -73,7 +78,7 @@
 <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
 
 <script>
-    let img = new Image();
+    const sourceImage = document.getElementById('sourceImage');
     const canvas = document.getElementById('canvas');
     const outputCanvas = document.getElementById('outputCanvas');
     const ctx = canvas.getContext('2d');
@@ -87,7 +92,7 @@
 
     let points = [];
     let draggingPoint = -1;
-    let dragOffset = {x: 0, y: 0}; // ਉਂਗਲ ਅਤੇ ਮੇਨ ਪੁਆਇੰਟ ਵਿਚਲੀ ਦੂਰੀ ਸੇਵ ਕਰਨ ਲਈ
+    let dragOffset = {x: 0, y: 0};
 
     function waitForCv(callback) {
         if (typeof cv !== 'undefined' && cv.Mat) { callback(); } 
@@ -98,7 +103,7 @@
         waitForCv(() => {
             loadingOverlay.style.display = 'none';
             controls.style.display = 'block';
-            instructions.innerText = "Upload a photo to begin.";
+            instructions.innerText = "ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਕੋਈ ਫੋਟੋ ਅਪਲੋਡ ਕਰੋ।";
             instructions.style.display = 'block';
         });
     };
@@ -108,9 +113,10 @@
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (event) => {
-            img.onload = () => {
-                canvas.width = img.width;
-                canvas.height = img.height;
+            sourceImage.onload = () => {
+                // ਕੈਨਵਸ ਨੂੰ ਅਸਲੀ HD ਫੋਟੋ ਦੇ ਸਾਈਜ਼ ਮੁਤਾਬਕ ਸੈੱਟ ਕਰਨਾ
+                canvas.width = sourceImage.width;
+                canvas.height = sourceImage.height;
                 
                 let w = canvas.width, h = canvas.height;
                 let padX = w * 0.15, padY = h * 0.15;
@@ -123,21 +129,17 @@
                 canvas.style.display = 'block';
                 cropBtn.style.display = 'inline-block';
                 downloadBtn.style.display = 'none';
-                instructions.innerText = "Drag the inner Blue handles. The green circles will show a zoomed view.";
-                draw(); // UI ਦੇ ਨਾਲ ਡਰਾਅ ਕਰੋ
+                instructions.innerText = "ਨੀਲੇ ਬਿੰਦੂਆਂ ਨੂੰ ਖਿੱਚੋ। ਹਰੇ ਗੋਲੇ ਵਿੱਚ ਤੁਹਾਨੂੰ ਜ਼ੂਮ ਹੋਈ ਫੋਟੋ ਸਾਫ਼ ਦਿਖੇਗੀ।";
+                draw();
             };
-            img.src = event.target.result;
+            sourceImage.src = event.target.result;
         };
         reader.readAsDataURL(file);
     });
 
-    // ਅੰਦਰਲੇ ਛੋਟੇ ਹੈਂਡਲਸ (Blue Dots) ਦੀ ਪੋਜੀਸ਼ਨ ਕੱਢਣ ਦਾ ਫੰਕਸ਼ਨ
     function getInnerHandles() {
-        // ਚਾਰੇ ਪੁਆਇੰਟਸ ਦਾ ਸੈਂਟਰ (Center) ਲੱਭਣਾ
         let cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
         let cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
-        
-        // ਛੋਟੇ ਹੈਂਡਲ ਨੂੰ ਮੇਨ ਹੈਂਡਲ ਤੋਂ ਕਿੰਨਾ ਅੰਦਰ ਰੱਖਣਾ ਹੈ (ਡਾਇਨਾਮਿਕ ਸਾਈਜ਼)
         let offsetDistance = Math.max(50, canvas.width * 0.08); 
         
         return points.map(p => {
@@ -149,70 +151,66 @@
         });
     }
 
-    // showUI=false ਕਰਨ ਨਾਲ ਸਾਰੀਆਂ ਹਰੀਆਂ ਲਾਈਨਾਂ ਹਾਈਡ ਹੋ ਜਾਣਗੀਆਂ
-    function draw(showUI = true) {
+    function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (img.src) ctx.drawImage(img, 0, 0);
+        if (sourceImage.src) ctx.drawImage(sourceImage, 0, 0);
 
-        if (showUI && points.length === 4) {
-            // 1. ਮੇਨ ਚੌਕੋਰ ਲਾਈਨਾਂ ਡਰਾਅ ਕਰਨਾ
+        if (points.length === 4) {
+            // 1. ਮੇਨ ਚੌਕੋਰ ਲਾਈਨਾਂ 
             ctx.beginPath();
             ctx.moveTo(points[0].x, points[0].y);
             for (let i = 1; i < 4; i++) ctx.lineTo(points[i].x, points[i].y);
             ctx.closePath();
-            ctx.lineWidth = Math.max(3, canvas.width * 0.005);
+            ctx.lineWidth = Math.max(4, canvas.width * 0.005);
             ctx.strokeStyle = '#00ff00';
             ctx.stroke();
 
             let innerHandles = getInnerHandles();
-            let magRadius = Math.max(35, canvas.width * 0.05); // ਮੈਗਨੀਫਾਇੰਗ ਗਲਾਸ ਦਾ ਸਾਈਜ਼
+            let magRadius = Math.max(40, canvas.width * 0.06); 
 
             for (let i = 0; i < 4; i++) {
                 let p = points[i];
                 let grabP = innerHandles[i];
 
-                // 2. ਮੇਨ ਪੁਆਇੰਟ ਤੋਂ ਛੋਟੇ ਹੈਂਡਲ ਤੱਕ ਲਾਈਨ
+                // 2. ਲਾਈਨ ਜੋ ਨੀਲੇ ਹੈਂਡਲ ਨੂੰ ਗੋਲੇ ਨਾਲ ਜੋੜਦੀ ਹੈ
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y);
                 ctx.lineTo(grabP.x, grabP.y);
-                ctx.lineWidth = 3;
+                ctx.lineWidth = Math.max(3, canvas.width * 0.004);
                 ctx.strokeStyle = '#00ff00';
                 ctx.stroke();
 
-                // 3. ਮੇਨ ਹੈਂਡਲ (ਜੋ ਕਿ ਹੁਣ ਜ਼ੂਮ ਲੈਨਜ਼/Magnifier ਹੈ)
+                // 3. ਜ਼ੂਮ ਲੈਨਜ਼ (ਹੁਣ ਫੋਟੋ ਸਾਫ਼ ਦਿਖੇਗੀ)
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, magRadius, 0, Math.PI * 2);
-                ctx.lineWidth = 4;
+                ctx.lineWidth = Math.max(6, canvas.width * 0.008);
                 ctx.strokeStyle = '#00ff00';
-                ctx.stroke();
-                ctx.clip(); // ਇਸ ਗੋਲੇ ਦੇ ਅੰਦਰ ਹੀ ਜ਼ੂਮ ਵਾਲੀ ਫੋਟੋ ਦਿਖੇਗੀ
+                ctx.stroke(); // ਹਰਾ ਬਾਰਡਰ ਬਣਾਓ
+                ctx.clip(); // ਗੋਲੇ ਦੇ ਅੰਦਰ ਹੀ ਰੱਖੋ
                 
-                let zoomFactor = 2.0; // ਕਿੰਨਾ ਗੁਣਾ ਜ਼ੂਮ ਕਰਨਾ ਹੈ
-                let srcW = (magRadius * 2) / zoomFactor;
-                let srcH = (magRadius * 2) / zoomFactor;
-                let srcX = p.x - srcW / 2;
-                let srcY = p.y - srcH / 2;
-                
-                // ਜ਼ੂਮ ਕੀਤੀ ਫੋਟੋ ਡਰਾਅ ਕਰਨਾ (ਓਰੀਜਨਲ ਫੋਟੋ ਤੋਂ)
-                ctx.fillStyle = "white"; ctx.fill();
-                ctx.drawImage(img, srcX, srcY, srcW, srcH, p.x - magRadius, p.y - magRadius, magRadius * 2, magRadius * 2);
-                
-                // ਜ਼ੂਮ ਲੈਨਜ਼ ਦੇ ਵਿਚਕਾਰ ਇੱਕ ਛੋਟਾ ਲਾਲ ਨਿਸ਼ਾਨ (Crosshair)
-                ctx.beginPath();
-                ctx.moveTo(p.x - 8, p.y); ctx.lineTo(p.x + 8, p.y);
-                ctx.moveTo(p.x, p.y - 8); ctx.lineTo(p.x, p.y + 8);
-                ctx.strokeStyle = '#ff0000';
-                ctx.lineWidth = 2;
-                ctx.stroke();
+                // ਜ਼ੂਮ ਕਰਨ ਦੀ ਅਸਲ ਤਕਨੀਕ: ਫੋਟੋ ਨੂੰ ਵੱਡਾ ਕਰਕੇ ਉਸ ਪੁਆਇੰਟ 'ਤੇ ਰੱਖਣਾ
+                ctx.translate(p.x, p.y);
+                ctx.scale(2.5, 2.5); // 2.5 ਗੁਣਾ ਜ਼ੂਮ
+                ctx.translate(-p.x, -p.y);
+                ctx.drawImage(sourceImage, 0, 0); 
                 ctx.restore();
 
-                // 4. ਅੰਦਰਲਾ ਛੋਟਾ ਹੈਂਡਲ (ਜਿਸਨੂੰ ਉਂਗਲ ਨਾਲ ਫੜਨਾ ਹੈ)
+                // 4. ਜ਼ੂਮ ਲੈਨਜ਼ ਦੇ ਵਿਚਕਾਰ ਲਾਲ Crosshair (+)
                 ctx.beginPath();
-                ctx.arc(grabP.x, grabP.y, Math.max(16, canvas.width * 0.025), 0, Math.PI * 2);
-                ctx.fillStyle = '#007bff'; // ਨੀਲਾ ਰੰਗ
+                let crossSize = Math.max(10, canvas.width * 0.015);
+                ctx.moveTo(p.x - crossSize, p.y); ctx.lineTo(p.x + crossSize, p.y);
+                ctx.moveTo(p.x, p.y - crossSize); ctx.lineTo(p.x, p.y + crossSize);
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = Math.max(3, canvas.width * 0.003);
+                ctx.stroke();
+
+                // 5. ਅੰਦਰਲਾ ਨੀਲਾ ਹੈਂਡਲ (ਫੜਨ ਲਈ)
+                ctx.beginPath();
+                ctx.arc(grabP.x, grabP.y, Math.max(20, canvas.width * 0.03), 0, Math.PI * 2);
+                ctx.fillStyle = '#007bff';
                 ctx.fill();
-                ctx.lineWidth = 2;
+                ctx.lineWidth = Math.max(3, canvas.width * 0.004);
                 ctx.strokeStyle = 'white';
                 ctx.stroke();
             }
@@ -231,21 +229,19 @@
     }
 
     function startDrag(e) {
-        if (e.target !== canvas || !img.src) return;
+        if (e.target !== canvas || !sourceImage.src) return;
         if(e.cancelable) e.preventDefault(); 
         
         const pos = getMousePos(e);
         let innerHandles = getInnerHandles();
-        let hitRadius = Math.max(30, canvas.width * 0.04); // ਫੜਨ ਦਾ ਏਰੀਆ
+        let hitRadius = Math.max(40, canvas.width * 0.05); // ਟੱਚ ਕਰਨ ਦਾ ਏਰੀਆ ਵੱਡਾ ਕੀਤਾ ਹੈ
         
         for (let i = 0; i < 4; i++) {
-            // ਅਸੀਂ ਚੈੱਕ ਕਰਨਾ ਹੈ ਕਿ ਉਂਗਲ ਮੇਨ ਪੁਆਇੰਟ 'ਤੇ ਨਹੀਂ, ਬਲਕਿ ਛੋਟੇ 'Blue' ਹੈਂਡਲ 'ਤੇ ਹੈ
             const dx = innerHandles[i].x - pos.x;
             const dy = innerHandles[i].y - pos.y;
             
-            if (Math.sqrt(dx*dx + dy*dy) < hitRadius * 2) {
+            if (Math.sqrt(dx*dx + dy*dy) < hitRadius * 1.5) {
                 draggingPoint = i;
-                // ਉਂਗਲ ਦੀ ਪੋਜੀਸ਼ਨ ਅਤੇ ਅਸਲ ਕਿਨਾਰੇ ਦਾ ਫਾਸਲਾ ਸੇਵ ਕਰਨਾ
                 dragOffset = { x: points[i].x - innerHandles[i].x, y: points[i].y - innerHandles[i].y };
                 break;
             }
@@ -256,7 +252,6 @@
         if (draggingPoint !== -1) {
             if(e.cancelable) e.preventDefault();
             const pos = getMousePos(e);
-            // ਮੇਨ ਪੁਆਇੰਟ ਨੂੰ ਉਂਗਲ ਦੇ ਹਿਸਾਬ ਨਾਲ ਮੂਵ ਕਰਨਾ
             points[draggingPoint].x = pos.x + dragOffset.x;
             points[draggingPoint].y = pos.y + dragOffset.y;
             draw();
@@ -273,52 +268,63 @@
     window.addEventListener('touchmove', drag, {passive: false});
     window.addEventListener('touchend', stopDrag);
 
-    // ਕਰੋਪ ਬਟਨ ਦਾ ਫੰਕਸ਼ਨ
+    // HD ਕਰੋਪ ਫੰਕਸ਼ਨ
     cropBtn.addEventListener('click', () => {
         if (typeof cv === 'undefined' || points.length !== 4) return;
 
-        // 🔥 ਗ੍ਰੀਨ ਲਾਈਨਾਂ ਦਾ ਹੱਲ: ਕਰੋਪ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਲਾਈਨਾਂ ਹਟਾਓ 🔥
-        draw(false); 
+        // ਯੂਜ਼ਰ ਨੂੰ ਦੱਸਣ ਲਈ ਕਿ HD ਫੋਟੋ ਤਿਆਰ ਹੋ ਰਹੀ ਹੈ
+        instructions.innerText = "⏳ HD ਫੋਟੋ ਤਿਆਰ ਹੋ ਰਹੀ ਹੈ, ਕਿਰਪਾ ਕਰਕੇ ਉਡੀਕ ਕਰੋ...";
+        cropBtn.style.opacity = '0.5';
         
-        let src = cv.imread(canvas);
+        // ਥੋੜ੍ਹਾ ਸਮਾਂ ਦੇਣਾ ਤਾਂ ਜੋ ਬ੍ਰਾਊਜ਼ਰ ਟੈਕਸਟ ਨੂੰ ਅਪਡੇਟ ਕਰ ਸਕੇ
+        setTimeout(() => {
+            // 🔥 ਅਸਲੀ (Hidden) ਫੋਟੋ ਤੋਂ ਸਿੱਧਾ ਡਾਟਾ ਲੈਣਾ (ਇਸ ਲਈ ਕੋਈ ਹਰੀ ਲਾਈਨ ਨਹੀਂ ਆਵੇਗੀ) 🔥
+            let src = cv.imread(sourceImage);
 
-        let w1 = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-        let w2 = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y);
-        let h1 = Math.hypot(points[0].x - points[3].x, points[0].y - points[3].y);
-        let h2 = Math.hypot(points[1].x - points[2].x, points[1].y - points[2].y);
-        let maxWidth = Math.max(w1, w2);
-        let maxHeight = Math.max(h1, h2);
+            let w1 = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+            let w2 = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y);
+            let h1 = Math.hypot(points[0].x - points[3].x, points[0].y - points[3].y);
+            let h2 = Math.hypot(points[1].x - points[2].x, points[1].y - points[2].y);
+            let maxWidth = Math.max(w1, w2);
+            let maxHeight = Math.max(h1, h2);
 
-        let dsize = new cv.Size(maxWidth, maxHeight);
-        
-        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-            points[0].x, points[0].y, points[1].x, points[1].y,
-            points[2].x, points[2].y, points[3].x, points[3].y
-        ]);
-        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-            0, 0, maxWidth, 0, maxWidth, maxHeight, 0, maxHeight
-        ]);
+            let dsize = new cv.Size(maxWidth, maxHeight);
+            
+            let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                points[0].x, points[0].y, points[1].x, points[1].y,
+                points[2].x, points[2].y, points[3].x, points[3].y
+            ]);
+            let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                0, 0, maxWidth, 0, maxWidth, maxHeight, 0, maxHeight
+            ]);
 
-        let M = cv.getPerspectiveTransform(srcTri, dstTri);
-        let dst = new cv.Mat();
-        
-        cv.warpPerspective(src, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+            let M = cv.getPerspectiveTransform(srcTri, dstTri);
+            let dst = new cv.Mat();
+            
+            // HD ਪ੍ਰੋਸੈਸਿੰਗ
+            cv.warpPerspective(src, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
 
-        cv.imshow('outputCanvas', dst);
+            cv.imshow('outputCanvas', dst);
 
-        src.delete(); dst.delete(); M.delete(); srcTri.delete(); dstTri.delete();
+            // ਮੈਮਰੀ ਖਾਲੀ ਕਰਨਾ
+            src.delete(); dst.delete(); M.delete(); srcTri.delete(); dstTri.delete();
 
-        canvas.style.display = 'none';
-        instructions.style.display = 'none';
-        cropBtn.style.display = 'none';
-        outputCanvas.style.display = 'block';
-        downloadBtn.style.display = 'inline-block';
+            // UI ਸੈੱਟਅੱਪ
+            canvas.style.display = 'none';
+            instructions.style.display = 'none';
+            cropBtn.style.display = 'none';
+            outputCanvas.style.display = 'block';
+            downloadBtn.style.display = 'inline-block';
+            cropBtn.style.opacity = '1';
+        }, 100);
     });
 
+    // HD ਫੋਟੋ ਡਾਊਨਲੋਡ ਕਰਨ ਲਈ (JPEG ਫਾਰਮੈਟ ਦੀ ਵਰਤੋਂ ਤਾਂ ਜੋ ਸਾਈਜ਼ ਠੀਕ ਰਹੇ ਅਤੇ ਕੁਆਲਿਟੀ ਵੀ)
     downloadBtn.addEventListener('click', () => {
         const link = document.createElement('a');
-        link.download = 'Clean-Cropped-Photo.png';
-        link.href = outputCanvas.toDataURL('image/png');
+        link.download = 'HD-Cropped-Photo.jpg';
+        // 1.0 ਦਾ ਮਤਲਬ ਹੈ 100% ਕੁਆਲਿਟੀ
+        link.href = outputCanvas.toDataURL('image/jpeg', 1.0);
         link.click();
     });
 </script>
