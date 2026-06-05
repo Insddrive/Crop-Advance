@@ -1,5 +1,4 @@
-const CACHE_NAME = 'crop-app-v2';
-
+const CACHE_NAME = 'crop-app-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -8,20 +7,21 @@ const urlsToCache = [
   './icon-512.png'
 ];
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(urlsToCache);
     })
   );
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', event => {
+  self.clients.claim();
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
+        cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
@@ -29,15 +29,16 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => {
-        return caches.match('./index.html');
-      });
+    caches.match(event.request).then(response => {
+      // ਜੇਕਰ ਫਾਈਲ ਕੈਸ਼ ਵਿੱਚ ਹੈ, ਤਾਂ ਉਹ ਦਿਓ, ਨਹੀਂ ਤਾਂ ਇੰਟਰਨੈੱਟ ਤੋਂ ਲਓ
+      return response || fetch(event.request);
+    }).catch(() => {
+      // ਜੇਕਰ ਇੰਟਰਨੈੱਟ ਨਹੀਂ ਹੈ, ਤਾਂ ਹੋਮਪੇਜ ਦਿਖਾਓ
+      return caches.match('./index.html');
     })
   );
 });
