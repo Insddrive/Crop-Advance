@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HD Precision Crop App</title>
+    <title>HD Precision Crop</title>
     <style>
         body { 
             font-family: system-ui, -apple-system, sans-serif; 
@@ -18,32 +18,30 @@
             margin: 0 auto; 
             background: white; 
             padding: 20px; 
-            border-radius: 20px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
         }
-        h2 { color: #1a1a1a; font-size: 22px; margin-top: 0; margin-bottom: 20px; }
+        h2 { color: #222; font-size: 20px; margin-top: 0; margin-bottom: 20px; font-weight: 600; }
         
-        #loading-overlay { text-align: center; font-weight: bold; margin-bottom: 20px; color: #007bff; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 25px; height: 25px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px;}
+        #loading-overlay { text-align: center; font-weight: 500; margin-bottom: 20px; color: #007bff; font-size: 15px; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #007bff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px;}
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .btn { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 10px; font-size: 16px; cursor: pointer; margin: 8px 4px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+        .btn { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 15px; cursor: pointer; margin: 8px 4px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
         .btn:hover { background: #0056b3; }
         .btn-success { background: #28a745; display: none; }
         
         input[type="file"] { display: none; }
-        .custom-file-upload { display: inline-block; padding: 12px 20px; cursor: pointer; background: #6c757d; color: white; border-radius: 10px; font-size: 16px; margin: 8px 4px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+        .custom-file-upload { display: inline-block; padding: 12px 24px; cursor: pointer; background: #495057; color: white; border-radius: 8px; font-size: 15px; margin: 8px 4px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
         
         #controls { display: none; }
-        #instructions { color: #555; font-size: 14px; margin-bottom: 15px; display: none; padding: 10px; background: #e9ecef; border-radius: 8px; font-weight: bold; }
 
-        #canvas-wrapper { position: relative; margin-top: 20px; display: inline-block; width: 100%; }
+        #canvas-wrapper { position: relative; margin-top: 15px; display: inline-block; width: 100%; }
         
-        #canvas { max-width: 100%; height: auto; display: block; border-radius: 10px; cursor: crosshair; background: #eee; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #canvas { max-width: 100%; height: auto; display: block; border-radius: 8px; cursor: crosshair; background: #f8f9fa; margin: 0 auto; border: 1px solid #dee2e6; }
         
-        #outputCanvas { display: none; margin-top: 20px; border: 3px solid #28a745; border-radius: 12px; max-width: 100%; height: auto; margin: 0 auto; }
+        #outputCanvas { display: none; margin-top: 15px; border: 2px solid #28a745; border-radius: 8px; max-width: 100%; height: auto; margin: 0 auto; }
 
-        /* Top Fixed Magnifier */
         #magnifier-container {
             position: fixed;
             top: 20px;
@@ -51,10 +49,10 @@
             transform: translateX(-50%);
             width: 160px;
             height: 160px;
-            border: 4px solid #007bff;
+            border: 3px solid #007bff;
             border-radius: 50%;
             background: white;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
             display: none;
             z-index: 9999;
             pointer-events: none;
@@ -67,10 +65,9 @@
             border-radius: 50%;
         }
 
-        /* ਛੋਟਾ ਜਿਹਾ ਲਾਲ ਪੁਆਇੰਟ (Crosshair) ਜੋ ਗੋਲੇ ਦੇ ਉੱਪਰ ਰਹੇਗਾ */
-        .crosshair-h { position: absolute; top: 50%; left: 15%; width: 70%; height: 2px; background: rgba(255,0,0,0.8); transform: translateY(-50%); }
-        .crosshair-v { position: absolute; top: 15%; left: 50%; width: 2px; height: 70%; background: rgba(255,0,0,0.8); transform: translateX(-50%); }
-        .crosshair-center { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: red; border-radius: 50%; transform: translate(-50%, -50%); }
+        .crosshair-h { position: absolute; top: 50%; left: 15%; width: 70%; height: 1px; background: rgba(255,0,0,0.8); transform: translateY(-50%); }
+        .crosshair-v { position: absolute; top: 15%; left: 50%; width: 1px; height: 70%; background: rgba(255,0,0,0.8); transform: translateX(-50%); }
+        .crosshair-center { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: red; border-radius: 50%; transform: translate(-50%, -50%); }
     </style>
 </head>
 <body>
@@ -83,23 +80,21 @@
 </div>
 
 <div class="app-container">
-    <h2>📸 HD Precision Crop</h2>
+    <h2>HD Precision Crop</h2>
     
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <span id="status-text">⏳ ਸਿਸਟਮ ਤਿਆਰ ਹੋ ਰਿਹਾ ਹੈ...</span>
+        <span id="status-text">Loading Library...</span>
     </div>
     
     <div id="controls">
         <label class="custom-file-upload">
             <input type="file" id="upload" accept="image/*">
-            📁 ਫੋਟੋ ਅਪਲੋਡ ਕਰੋ
+            Upload
         </label>
-        <button id="cropBtn" class="btn" style="display: none;">✂️ HD ਕਰੋਪ ਕਰੋ</button>
-        <button id="downloadBtn" class="btn btn-success">⬇️ HD ਫੋਟੋ ਡਾਊਨਲੋਡ ਕਰੋ</button>
+        <button id="cropBtn" class="btn" style="display: none;">Crop</button>
+        <button id="downloadBtn" class="btn btn-success">Download</button>
     </div>
-
-    <p id="instructions"></p>
 
     <img id="sourceImage" style="display: none;">
 
@@ -125,7 +120,6 @@
     const uploadInput = document.getElementById('upload');
     const cropBtn = document.getElementById('cropBtn');
     const downloadBtn = document.getElementById('downloadBtn');
-    const instructions = document.getElementById('instructions');
     const loadingOverlay = document.getElementById('loading-overlay');
     const controls = document.getElementById('controls');
 
@@ -142,8 +136,6 @@
         waitForCv(() => {
             loadingOverlay.style.display = 'none';
             controls.style.display = 'block';
-            instructions.innerText = "ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਕੋਈ ਫੋਟੋ ਅਪਲੋਡ ਕਰੋ।";
-            instructions.style.display = 'block';
         });
     };
 
@@ -167,7 +159,6 @@
                 canvas.style.display = 'block';
                 cropBtn.style.display = 'inline-block';
                 downloadBtn.style.display = 'none';
-                instructions.innerText = "ਹੈਂਡਲ ਨੂੰ ਖਿੱਚੋ, ਸਕ੍ਰੀਨ ਦੇ ਉੱਪਰਲੇ ਗੋਲੇ ਵਿੱਚ ਬਿਨਾਂ ਨਿਸ਼ਾਨਾਂ ਦੇ ਬਿਲਕੁਲ ਸਾਫ਼ ਜ਼ੂਮ ਦਿਸੇਗਾ।";
                 draw();
             };
             sourceImage.src = event.target.result;
@@ -231,16 +222,13 @@
         }
     }
 
-    // 🔥 ਬਿਲਕੁਲ ਨਵਾਂ ਅਤੇ ਸਹੀ ਮੈਗਨੀਫਾਇਰ ਫੰਕਸ਼ਨ 🔥
     function updateMagnifier() {
         if (draggingPoint === -1) return;
 
         let p = points[draggingPoint];
-        let magSize = magCanvas.width; // 200px
+        let magSize = magCanvas.width; 
         let zoomFactor = 2.0; 
         
-        // ਸਕ੍ਰੀਨ ਦੇ ਹਿਸਾਬ ਨਾਲ ਅਸਲੀ ਫੋਟੋ ਦਾ ਸਹੀ ਸਕੇਲ ਕੱਢਣਾ
-        // ਇਸ ਨਾਲ HD ਫੋਟੋਆਂ 'ਤੇ ਵੀ ਜ਼ੂਮ ਦਾ ਸਾਈਜ਼ ਬਿਲਕੁਲ ਪਰਫੈਕਟ ਰਹੇਗਾ
         const rect = canvas.getBoundingClientRect();
         const scale = canvas.width / rect.width;
 
@@ -250,9 +238,6 @@
         let srcY = p.y - srcH / 2;
 
         magCtx.clearRect(0, 0, magSize, magSize);
-        
-        // ਧਿਆਨ ਦਿਓ: ਇੱਥੇ 'canvas' ਦੀ ਬਜਾਏ 'sourceImage' ਵਰਤਿਆ ਗਿਆ ਹੈ।
-        // ਇਸਦਾ ਮਤਲਬ ਹੈ ਕਿ ਗੋਲੇ ਵਿੱਚ ਕੋਈ ਵੀ ਹਰੀ ਲਾਈਨ ਜਾਂ ਬਿੰਦੂ ਨਹੀਂ ਆਵੇਗਾ, ਸਿਰਫ਼ ਸਾਫ਼ ਫੋਟੋ ਦਿਸੇਗੀ!
         magCtx.drawImage(sourceImage, srcX, srcY, srcW, srcH, 0, 0, magSize, magSize);
     }
 
@@ -324,7 +309,7 @@
     cropBtn.addEventListener('click', () => {
         if (typeof cv === 'undefined' || points.length !== 4) return;
 
-        instructions.innerText = "⏳ HD ਫੋਟੋ ਤਿਆਰ ਹੋ ਰਹੀ ਹੈ, ਕਿਰਪਾ ਕਰਕੇ ਉਡੀਕ ਕਰੋ...";
+        cropBtn.innerText = "Processing...";
         cropBtn.style.opacity = '0.5';
         
         setTimeout(() => {
@@ -357,17 +342,17 @@
             src.delete(); dst.delete(); M.delete(); srcTri.delete(); dstTri.delete();
 
             canvas.style.display = 'none';
-            instructions.style.display = 'none';
             cropBtn.style.display = 'none';
+            cropBtn.innerText = "Crop";
+            cropBtn.style.opacity = '1';
             outputCanvas.style.display = 'block';
             downloadBtn.style.display = 'inline-block';
-            cropBtn.style.opacity = '1';
         }, 100);
     });
 
     downloadBtn.addEventListener('click', () => {
         const link = document.createElement('a');
-        link.download = 'HD-Cropped-Photo.jpg';
+        link.download = 'Cropped.jpg';
         link.href = outputCanvas.toDataURL('image/jpeg', 1.0);
         link.click();
     });
