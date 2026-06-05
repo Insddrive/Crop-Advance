@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Perspective Crop App with Precision Magnifier</title>
+    <title>Advanced Precision Crop App</title>
     <style>
         body { 
             font-family: system-ui, -apple-system, sans-serif; 
@@ -37,36 +37,19 @@
         #controls { display: none; }
         #instructions { color: #555; font-size: 14px; margin-bottom: 15px; display: none; padding: 10px; background: #e9ecef; border-radius: 8px; }
 
-        /* Canvas Container to hold magnifier */
-        #canvas-wrapper { position: relative; margin-top: 20px; display: inline-block; }
-        
-        #canvas { max-width: 100%; height: auto; display: block; border-radius: 10px; cursor: crosshair; touch-action: none; background: #eee; min-height: 150px; }
-        
-        #outputCanvas { display: none; margin-top: 20px; border: 2px solid #28a745; border-radius: 12px; max-width: 100%; height: auto; }
-
-        /* 🔥 MAGNIFIER STYLE 🔥 */
-        #magnifierCanvas {
-            position: absolute;
-            width: 130px; /* UI Size */
-            height: 130px; /* UI Size */
-            border-radius: 50%;
-            border: 4px solid #00ff00; /* Matching handle color */
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
-            display: none; /* Hidden by default */
-            pointer-events: none; /* Crucial: clicks pass through it */
-            z-index: 100;
-            background-color: white;
-        }
+        #canvas-wrapper { position: relative; margin-top: 20px; display: inline-block; width: 100%; }
+        #canvas { max-width: 100%; height: auto; display: block; border-radius: 10px; cursor: crosshair; touch-action: none; background: #eee; margin: 0 auto; }
+        #outputCanvas { display: none; margin-top: 20px; border: 2px solid #28a745; border-radius: 12px; max-width: 100%; height: auto; margin: 0 auto; }
     </style>
 </head>
 <body>
 
 <div class="app-container">
-    <h2>📸 Precision Crop App</h2>
+    <h2>📸 Advanced Precision Crop</h2>
     
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <span id="status-text">⏳ Loading library...</span>
+        <span id="status-text">⏳ Loading system...</span>
     </div>
     
     <div id="controls">
@@ -75,14 +58,13 @@
             📁 Upload Photo
         </label>
         <button id="cropBtn" class="btn" style="display: none;">✂️ Crop & Straighten</button>
-        <button id="downloadBtn" class="btn btn-success">⬇️ Download Result</button>
+        <button id="downloadBtn" class="btn btn-success">⬇️ Download Clean Photo</button>
     </div>
 
     <p id="instructions"></p>
 
     <div id="canvas-wrapper">
         <canvas id="canvas"></canvas>
-        <canvas id="magnifierCanvas"></canvas>
     </div>
     
     <canvas id="outputCanvas"></canvas>
@@ -95,8 +77,6 @@
     const canvas = document.getElementById('canvas');
     const outputCanvas = document.getElementById('outputCanvas');
     const ctx = canvas.getContext('2d');
-    const magCanvas = document.getElementById('magnifierCanvas');
-    const magCtx = magCanvas.getContext('2d');
     
     const uploadInput = document.getElementById('upload');
     const cropBtn = document.getElementById('cropBtn');
@@ -104,16 +84,10 @@
     const instructions = document.getElementById('instructions');
     const loadingOverlay = document.getElementById('loading-overlay');
     const controls = document.getElementById('controls');
-    const statusText = document.getElementById('status-text');
 
     let points = [];
     let draggingPoint = -1;
-    const basePointRadius = 14; // Visible size
-    const tapAreaMultiplier = 3.0; // Invisible interactive area
-
-    // 🔥 Magnifier Configuration 🔥
-    const magnifierSize = 130; // internal resolution
-    const zoomFactor = 2.5; // How much to zoom
+    let dragOffset = {x: 0, y: 0}; // ਉਂਗਲ ਅਤੇ ਮੇਨ ਪੁਆਇੰਟ ਵਿਚਲੀ ਦੂਰੀ ਸੇਵ ਕਰਨ ਲਈ
 
     function waitForCv(callback) {
         if (typeof cv !== 'undefined' && cv.Mat) { callback(); } 
@@ -138,10 +112,6 @@
                 canvas.width = img.width;
                 canvas.height = img.height;
                 
-                // Also set internal magnifier resolution
-                magCanvas.width = magnifierSize;
-                magCanvas.height = magnifierSize;
-                
                 let w = canvas.width, h = canvas.height;
                 let padX = w * 0.15, padY = h * 0.15;
                 points = [
@@ -153,114 +123,130 @@
                 canvas.style.display = 'block';
                 cropBtn.style.display = 'inline-block';
                 downloadBtn.style.display = 'none';
-                instructions.innerText = "Drag the green points to the corners. Use the zoom glass at the top for precision.";
-                draw();
+                instructions.innerText = "Drag the inner Blue handles. The green circles will show a zoomed view.";
+                draw(); // UI ਦੇ ਨਾਲ ਡਰਾਅ ਕਰੋ
             };
             img.src = event.target.result;
         };
         reader.readAsDataURL(file);
     });
 
-    function draw() {
+    // ਅੰਦਰਲੇ ਛੋਟੇ ਹੈਂਡਲਸ (Blue Dots) ਦੀ ਪੋਜੀਸ਼ਨ ਕੱਢਣ ਦਾ ਫੰਕਸ਼ਨ
+    function getInnerHandles() {
+        // ਚਾਰੇ ਪੁਆਇੰਟਸ ਦਾ ਸੈਂਟਰ (Center) ਲੱਭਣਾ
+        let cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
+        let cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
+        
+        // ਛੋਟੇ ਹੈਂਡਲ ਨੂੰ ਮੇਨ ਹੈਂਡਲ ਤੋਂ ਕਿੰਨਾ ਅੰਦਰ ਰੱਖਣਾ ਹੈ (ਡਾਇਨਾਮਿਕ ਸਾਈਜ਼)
+        let offsetDistance = Math.max(50, canvas.width * 0.08); 
+        
+        return points.map(p => {
+            let dx = cx - p.x;
+            let dy = cy - p.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist === 0) return {x: p.x, y: p.y};
+            return { x: p.x + (dx/dist) * offsetDistance, y: p.y + (dy/dist) * offsetDistance };
+        });
+    }
+
+    // showUI=false ਕਰਨ ਨਾਲ ਸਾਰੀਆਂ ਹਰੀਆਂ ਲਾਈਨਾਂ ਹਾਈਡ ਹੋ ਜਾਣਗੀਆਂ
+    function draw(showUI = true) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (img.src) ctx.drawImage(img, 0, 0);
 
-        if (points.length === 4) {
+        if (showUI && points.length === 4) {
+            // 1. ਮੇਨ ਚੌਕੋਰ ਲਾਈਨਾਂ ਡਰਾਅ ਕਰਨਾ
             ctx.beginPath();
             ctx.moveTo(points[0].x, points[0].y);
             for (let i = 1; i < 4; i++) ctx.lineTo(points[i].x, points[i].y);
             ctx.closePath();
-            ctx.lineWidth = Math.max(4, canvas.width * 0.006);
+            ctx.lineWidth = Math.max(3, canvas.width * 0.005);
             ctx.strokeStyle = '#00ff00';
             ctx.stroke();
 
-            ctx.fillStyle = '#00ff00';
-            let dynamicRadius = Math.max(basePointRadius, canvas.width * 0.015);
-            points.forEach(p => {
+            let innerHandles = getInnerHandles();
+            let magRadius = Math.max(35, canvas.width * 0.05); // ਮੈਗਨੀਫਾਇੰਗ ਗਲਾਸ ਦਾ ਸਾਈਜ਼
+
+            for (let i = 0; i < 4; i++) {
+                let p = points[i];
+                let grabP = innerHandles[i];
+
+                // 2. ਮੇਨ ਪੁਆਇੰਟ ਤੋਂ ਛੋਟੇ ਹੈਂਡਲ ਤੱਕ ਲਾਈਨ
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, dynamicRadius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = 'white';
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(grabP.x, grabP.y);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#00ff00';
+                ctx.stroke();
+
+                // 3. ਮੇਨ ਹੈਂਡਲ (ਜੋ ਕਿ ਹੁਣ ਜ਼ੂਮ ਲੈਨਜ਼/Magnifier ਹੈ)
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, magRadius, 0, Math.PI * 2);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#00ff00';
+                ctx.stroke();
+                ctx.clip(); // ਇਸ ਗੋਲੇ ਦੇ ਅੰਦਰ ਹੀ ਜ਼ੂਮ ਵਾਲੀ ਫੋਟੋ ਦਿਖੇਗੀ
+                
+                let zoomFactor = 2.0; // ਕਿੰਨਾ ਗੁਣਾ ਜ਼ੂਮ ਕਰਨਾ ਹੈ
+                let srcW = (magRadius * 2) / zoomFactor;
+                let srcH = (magRadius * 2) / zoomFactor;
+                let srcX = p.x - srcW / 2;
+                let srcY = p.y - srcH / 2;
+                
+                // ਜ਼ੂਮ ਕੀਤੀ ਫੋਟੋ ਡਰਾਅ ਕਰਨਾ (ਓਰੀਜਨਲ ਫੋਟੋ ਤੋਂ)
+                ctx.fillStyle = "white"; ctx.fill();
+                ctx.drawImage(img, srcX, srcY, srcW, srcH, p.x - magRadius, p.y - magRadius, magRadius * 2, magRadius * 2);
+                
+                // ਜ਼ੂਮ ਲੈਨਜ਼ ਦੇ ਵਿਚਕਾਰ ਇੱਕ ਛੋਟਾ ਲਾਲ ਨਿਸ਼ਾਨ (Crosshair)
+                ctx.beginPath();
+                ctx.moveTo(p.x - 8, p.y); ctx.lineTo(p.x + 8, p.y);
+                ctx.moveTo(p.x, p.y - 8); ctx.lineTo(p.x, p.y + 8);
+                ctx.strokeStyle = '#ff0000';
                 ctx.lineWidth = 2;
                 ctx.stroke();
-            });
+                ctx.restore();
+
+                // 4. ਅੰਦਰਲਾ ਛੋਟਾ ਹੈਂਡਲ (ਜਿਸਨੂੰ ਉਂਗਲ ਨਾਲ ਫੜਨਾ ਹੈ)
+                ctx.beginPath();
+                ctx.arc(grabP.x, grabP.y, Math.max(16, canvas.width * 0.025), 0, Math.PI * 2);
+                ctx.fillStyle = '#007bff'; // ਨੀਲਾ ਰੰਗ
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'white';
+                ctx.stroke();
+            }
         }
     }
-
-    // --- Helper for Magnifier positioning and drawing ---
-    function updateMagnifier(pointPos, touchPosUI) {
-        // 1. Draw zoomed content
-        magCtx.save();
-        // Create circular clipping path
-        magCtx.beginPath();
-        magCtx.arc(magnifierSize/2, magnifierSize/2, magnifierSize/2, 0, Math.PI * 2);
-        magCtx.clip();
-        
-        // Draw the main canvas onto magnifier canvas
-        // (This includes the photo, lines, and the point itself)
-        const srcW = magnifierSize / zoomFactor;
-        const srcH = magnifierSize / zoomFactor;
-        const srcX = pointPos.x - srcW / 2;
-        const srcY = pointPos.y - srcH / 2;
-
-        magCtx.fillStyle = "white"; // Background if out of bounds
-        magCtx.fillRect(0,0,magnifierSize,magnifierSize);
-        magCtx.drawImage(canvas, srcX, srcY, srcW, srcH, 0, 0, magnifierSize, magnifierSize);
-        magCtx.restore();
-
-        // 2. Position the UI element
-        // Offset it slightly upwards and to the left of the finger so it's not covered
-        const offsetX = -magnifierSize * 0.8; 
-        const offsetY = -magnifierSize * 1.2;
-        
-        magCanvas.style.left = (touchPosUI.left + offsetX) + 'px';
-        magCanvas.style.top = (touchPosUI.top + offsetY) + 'px';
-    }
-
 
     function getMousePos(evt) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-        let clientX, clientY;
-        
+        let clientX = evt.clientX, clientY = evt.clientY;
         if (evt.touches && evt.touches.length > 0) {
-            clientX = evt.touches[0].clientX;
-            clientY = evt.touches[0].clientY;
-        } else {
-            clientX = evt.clientX;
-            clientY = evt.clientY;
+            clientX = evt.touches[0].clientX; clientY = evt.touches[0].clientY;
         }
-
-        return {
-            canvasCoord: {
-                x: (clientX - rect.left) * scaleX,
-                y: (clientY - rect.top) * scaleY
-            },
-            uiCoord: {
-                left: clientX - rect.left,
-                top: clientY - rect.top
-            }
-        };
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
     }
 
     function startDrag(e) {
         if (e.target !== canvas || !img.src) return;
-        if(e.cancelable) e.preventDefault(); // Good for mobile
+        if(e.cancelable) e.preventDefault(); 
         
         const pos = getMousePos(e);
-        const dynamicRadius = Math.max(basePointRadius, canvas.width * 0.015);
+        let innerHandles = getInnerHandles();
+        let hitRadius = Math.max(30, canvas.width * 0.04); // ਫੜਨ ਦਾ ਏਰੀਆ
         
         for (let i = 0; i < 4; i++) {
-            const dx = points[i].x - pos.canvasCoord.x;
-            const dy = points[i].y - pos.canvasCoord.y;
-            // Larger invisible tap area
-            if (Math.sqrt(dx*dx + dy*dy) < dynamicRadius * tapAreaMultiplier) {
+            // ਅਸੀਂ ਚੈੱਕ ਕਰਨਾ ਹੈ ਕਿ ਉਂਗਲ ਮੇਨ ਪੁਆਇੰਟ 'ਤੇ ਨਹੀਂ, ਬਲਕਿ ਛੋਟੇ 'Blue' ਹੈਂਡਲ 'ਤੇ ਹੈ
+            const dx = innerHandles[i].x - pos.x;
+            const dy = innerHandles[i].y - pos.y;
+            
+            if (Math.sqrt(dx*dx + dy*dy) < hitRadius * 2) {
                 draggingPoint = i;
-                
-                // Show and place magnifier
-                magCanvas.style.display = 'block';
-                updateMagnifier(points[draggingPoint], pos.uiCoord);
+                // ਉਂਗਲ ਦੀ ਪੋਜੀਸ਼ਨ ਅਤੇ ਅਸਲ ਕਿਨਾਰੇ ਦਾ ਫਾਸਲਾ ਸੇਵ ਕਰਨਾ
+                dragOffset = { x: points[i].x - innerHandles[i].x, y: points[i].y - innerHandles[i].y };
                 break;
             }
         }
@@ -270,20 +256,14 @@
         if (draggingPoint !== -1) {
             if(e.cancelable) e.preventDefault();
             const pos = getMousePos(e);
-            points[draggingPoint].x = pos.canvasCoord.x;
-            points[draggingPoint].y = pos.canvasCoord.y;
-            
-            // Draw main canvas
+            // ਮੇਨ ਪੁਆਇੰਟ ਨੂੰ ਉਂਗਲ ਦੇ ਹਿਸਾਬ ਨਾਲ ਮੂਵ ਕਰਨਾ
+            points[draggingPoint].x = pos.x + dragOffset.x;
+            points[draggingPoint].y = pos.y + dragOffset.y;
             draw();
-            // Update zoomed view
-            updateMagnifier(points[draggingPoint], pos.uiCoord);
         }
     }
 
-    function stopDrag(e) {
-        draggingPoint = -1;
-        magCanvas.style.display = 'none'; // Hide magnifier
-    }
+    function stopDrag(e) { draggingPoint = -1; }
 
     canvas.addEventListener('mousedown', startDrag);
     window.addEventListener('mousemove', drag);
@@ -293,23 +273,41 @@
     window.addEventListener('touchmove', drag, {passive: false});
     window.addEventListener('touchend', stopDrag);
 
+    // ਕਰੋਪ ਬਟਨ ਦਾ ਫੰਕਸ਼ਨ
     cropBtn.addEventListener('click', () => {
         if (typeof cv === 'undefined' || points.length !== 4) return;
+
+        // 🔥 ਗ੍ਰੀਨ ਲਾਈਨਾਂ ਦਾ ਹੱਲ: ਕਰੋਪ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਲਾਈਨਾਂ ਹਟਾਓ 🔥
+        draw(false); 
+        
         let src = cv.imread(canvas);
+
         let w1 = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
         let w2 = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y);
         let h1 = Math.hypot(points[0].x - points[3].x, points[0].y - points[3].y);
         let h2 = Math.hypot(points[1].x - points[2].x, points[1].y - points[2].y);
         let maxWidth = Math.max(w1, w2);
         let maxHeight = Math.max(h1, h2);
+
         let dsize = new cv.Size(maxWidth, maxHeight);
-        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [points[0].x, points[0].y, points[1].x, points[1].y, points[2].x, points[2].y, points[3].x, points[3].y]);
-        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, maxWidth, 0, maxWidth, maxHeight, 0, maxHeight]);
+        
+        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            points[0].x, points[0].y, points[1].x, points[1].y,
+            points[2].x, points[2].y, points[3].x, points[3].y
+        ]);
+        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            0, 0, maxWidth, 0, maxWidth, maxHeight, 0, maxHeight
+        ]);
+
         let M = cv.getPerspectiveTransform(srcTri, dstTri);
         let dst = new cv.Mat();
+        
         cv.warpPerspective(src, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
         cv.imshow('outputCanvas', dst);
+
         src.delete(); dst.delete(); M.delete(); srcTri.delete(); dstTri.delete();
+
         canvas.style.display = 'none';
         instructions.style.display = 'none';
         cropBtn.style.display = 'none';
@@ -319,7 +317,7 @@
 
     downloadBtn.addEventListener('click', () => {
         const link = document.createElement('a');
-        link.download = 'Cropped-Result.png';
+        link.download = 'Clean-Cropped-Photo.png';
         link.href = outputCanvas.toDataURL('image/png');
         link.click();
     });
