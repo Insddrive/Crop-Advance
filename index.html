@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Advanced Photo Crop App</title>
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            text-align: center; 
+            color: #333; 
+        }
+        .app-container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+        }
+        h2 { 
+            color: #1a1a1a; 
+            font-size: 24px; 
+            margin-top: 0; 
+            margin-bottom: 25px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 10px; 
+        }
+        
+        /* Loading Overlay Style */
+        #loading-overlay {
+            display: block;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #status-text {
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* Standard Buttons */
+        .btn { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 14px 24px; 
+            border-radius: 10px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            margin: 12px 6px; 
+            font-weight: 600; 
+            transition: background 0.2s;
+            /* Disable blue tap highlight on mobile */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:hover { background: #0056b3; }
+        .btn:active { background: #004085; }
+        
+        .btn-success { background: #28a745; display: none; }
+        .btn-success:hover { background: #218838; }
+        
+        .btn-secondary { background: #6c757d; }
+
+        /* File Upload Styling */
+        input[type="file"] { display: none; }
+        .custom-file-upload { 
+            display: inline-block; 
+            padding: 14px 24px; 
+            cursor: pointer; 
+            background: #6c757d; 
+            color: white; 
+            border-radius: 10px; 
+            font-size: 16px; 
+            margin: 12px 6px; 
+            font-weight: 600; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        #controls { display: none; }
+
+        /* Instructions Text */
+        #instructions { 
+            color: #555; 
+            font-size: 15px; 
+            margin-bottom: 15px; 
+            display: none; 
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 8px;
+        }
+
+        /* Canvas and Containers */
+        #canvas-container { 
+            position: relative; 
+            margin-top: 25px; 
+            border-radius: 12px;
+            overflow: hidden;
+            background: #eee;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas { 
+            max-width: 100%; 
+            height: auto; 
+            display: block;
+            border-radius: 10px; 
+            cursor: crosshair; 
+            touch-action: none; 
+        }
+        
+        /* The resulting cropped image canvas */
+        #outputCanvas { 
+            display: none; 
+            margin-top: 20px;
+            border: 2px solid #28a745;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2>📸 Perspective Crop App</h2>
+    
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <span id="status-text">⏳ Loading library, please wait...</span>
+    </div>
+    
+    <div id="controls">
+        <label class="custom-file-upload">
+            <input type="file" id="upload" accept="image/*">
+            📁 Upload Photo
+        </label>
+        <button id="cropBtn" class="btn" style="display: none;">✂️ Crop & Straighten</button>
+        <button id="downloadBtn" class="btn btn-success">⬇️ Download Result</button>
+    </div>
+
+    <p id="instructions">First, upload a photo. Then, drag the four green points to the corners of the area you want to straighten.</p>
+
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+        <canvas id="outputCanvas"></canvas>
+    </div>
+</div>
+
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+
+<script>
+    let img = new Image();
+    const canvas = document.getElementById('canvas');
+    const outputCanvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d');
+    const uploadInput = document.getElementById('upload');
+    const cropBtn = document.getElementById('cropBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const instructions = document.getElementById('instructions');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const controls = document.getElementById('controls');
+    const statusText = document.getElementById('status-text');
+
+    let points = [];
+    let draggingPoint = -1;
+    const basePointRadius = 16; // Ideal size for touch targets
+    const dragAreaMultiplier = 3.5; // Tap area around the handle
+
+    // --- Robust OpenCV loading check ---
+    function waitForCv(callback) {
+        if (typeof cv !== 'undefined' && cv.Mat) {
+            callback();
+        } else {
+            statusText.innerText = '⏳ Finishing setup, almost ready...';
+            setTimeout(() => waitForCv(callback), 100);
+        }
+    }
+
+    // Initialize only after library is ready
+    window.onload = function() {
+        waitForCv(() => {
+            loadingOverlay.style.display = 'none';
+            controls.style.display = 'block';
+            instructions.style.display = 'block';
+        });
+    };
+
+    // --- File Input Handler ---
+    uploadInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                
+                let w = canvas.width, h = canvas.height;
+                let padX = w * 0.15, padY = h * 0.15;
+                points = [
+                    {x: padX, y: padY},          // Top Left
+                    {x: w - padX, y: padY},      // Top Right
+                    {x: w - padX, y: h - padY},  // Bottom Right
+                    {x: padX, y: h - padY}       // Bottom Left
+                ];
+                
+                outputCanvas.style.display = 'none';
+                canvas.style.display = 'block';
+                cropBtn.style.display = 'inline-block';
+                downloadBtn.style.display = 'none';
+                instructions.innerText = "Drag the four green points to the corners of the area you want to straighten.";
+                draw();
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // --- Core Drawing Function ---
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (img.src) ctx.drawImage(img, 0, 0);
+
+        if (points.length === 4) {
+            // Draw lines between points
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < 4; i++) ctx.lineTo(points[i].x, points[i].y);
+            ctx.closePath();
+            ctx.lineWidth = Math.max(4, canvas.width * 0.006);
+            ctx.strokeStyle = '#00ff00';
+            ctx.stroke();
+
+            // Draw four points (Handles)
+            ctx.fillStyle = '#00ff00'; // Pure green for handles
+            let dynamicRadius = Math.max(basePointRadius, canvas.width * 0.02);
+            points.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, dynamicRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+        }
+    }
+
+    // --- Event Handling Helpers ---
+    function getMousePos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let clientX = evt.clientX;
+        let clientY = evt.clientY;
+        
+        if (evt.touches && evt.touches.length > 0) {
+            clientX = evt.touches[0].clientX;
+            clientY = evt.touches[0].clientY;
+        }
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+
+    function startDrag(e) {
+        // Prevent default tap behaviors on mobile
+        if (e.target !== canvas) return;
+        e.preventDefault();
+        
+        const pos = getMousePos(e);
+        let dynamicRadius = Math.max(basePointRadius, canvas.width * 0.02);
+        
+        for (let i = 0; i < 4; i++) {
+            const dx = points[i].x - pos.x;
+            const dy = points[i].y - pos.y;
+            // Larger tap area
+            if (Math.sqrt(dx*dx + dy*dy) < dynamicRadius * dragAreaMultiplier) {
+                draggingPoint = i;
+                break;
+            }
+        }
+    }
+
+    function drag(e) {
+        if (draggingPoint !== -1) {
+            e.preventDefault();
+            const pos = getMousePos(e);
+            points[draggingPoint].x = pos.x;
+            points[draggingPoint].y = pos.y;
+            draw();
+        }
+    }
+
+    function stopDrag(e) {
+        draggingPoint = -1;
+    }
+
+    // Mouse Events
+    canvas.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', drag); // Drag anywhere on window
+    window.addEventListener('mouseup', stopDrag);
+    
+    // Mobile Touch Events (Explicit handling)
+    canvas.addEventListener('touchstart', startDrag, {passive: false});
+    window.addEventListener('touchmove', drag, {passive: false});
+    window.addEventListener('touchend', stopDrag);
+
+    // --- Perspective Crop and Straighten (The logic) ---
+    cropBtn.addEventListener('click', () => {
+        if (typeof cv === 'undefined' || points.length !== 4) return;
+
+        let src = cv.imread(canvas);
+
+        // Estimate new dimensions
+        let w1 = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+        let w2 = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y);
+        let h1 = Math.hypot(points[0].x - points[3].x, points[0].y - points[3].y);
+        let h2 = Math.hypot(points[1].x - points[2].x, points[1].y - points[2].y);
+        let maxWidth = Math.max(w1, w2);
+        let maxHeight = Math.max(h1, h2);
+
+        let dsize = new cv.Size(maxWidth, maxHeight);
+        
+        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            points[0].x, points[0].y,
+            points[1].x, points[1].y,
+            points[2].x, points[2].y,
+            points[3].x, points[3].y
+        ]);
+        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            0, 0,
+            maxWidth, 0,
+            maxWidth, maxHeight,
+            0, maxHeight
+        ]);
+
+        let M = cv.getPerspectiveTransform(srcTri, dstTri);
+        let dst = new cv.Mat();
+        
+        // Final straighten operation
+        cv.warpPerspective(src, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+        cv.imshow('outputCanvas', dst);
+
+        // Clear Memory
+        src.delete(); dst.delete(); M.delete(); srcTri.delete(); dstTri.delete();
+
+        // Update UI
+        canvas.style.display = 'none';
+        instructions.style.display = 'none';
+        cropBtn.style.display = 'none';
+        outputCanvas.style.display = 'block';
+        downloadBtn.style.display = 'inline-block';
+    });
+
+    // --- Download Handler ---
+    downloadBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = 'Perspective-Cropped-Result.png';
+        link.href = outputCanvas.toDataURL('image/png');
+        link.click();
+    });
+</script>
+
+</body>
+</html>
