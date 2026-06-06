@@ -292,8 +292,16 @@
         if (draggingPoint !== -1) {
             if(e.cancelable) e.preventDefault();
             const pos = getMousePos(e);
-            points[draggingPoint].x = pos.x + dragOffset.x;
-            points[draggingPoint].y = pos.y + dragOffset.y;
+            
+            let newX = pos.x + dragOffset.x;
+            let newY = pos.y + dragOffset.y;
+
+            // ਹੈਂਡਲਸ ਨੂੰ ਫੋਟੋ (ਕੈਨਵਸ) ਦੇ ਕਿਨਾਰਿਆਂ ਤੱਕ ਸੀਮਤ ਕਰੋ
+            newX = Math.max(0, Math.min(newX, canvas.width));
+            newY = Math.max(0, Math.min(newY, canvas.height));
+
+            points[draggingPoint].x = newX;
+            points[draggingPoint].y = newY;
             
             draw();
             updateMagnifier(); 
