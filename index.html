@@ -24,6 +24,7 @@
             padding: 20px; 
             border-radius: 12px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            box-sizing: border-box;
         }
         h2 { color: #222; font-size: 20px; margin-top: 0; margin-bottom: 20px; font-weight: 600; }
         
@@ -74,9 +75,37 @@
         .crosshair-h { position: absolute; top: 50%; left: 15%; width: 70%; height: 1px; background: rgba(255,0,0,0.8); transform: translateY(-50%); }
         .crosshair-v { position: absolute; top: 15%; left: 50%; width: 1px; height: 70%; background: rgba(255,0,0,0.8); transform: translateX(-50%); }
         .crosshair-center { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: red; border-radius: 50%; transform: translate(-50%, -50%); }
+
+        /* ਕੰਪਿਊਟਰ (Desktop) ਸਕ੍ਰੀਨ ਲਈ ਖਾਸ ਸੈਟਿੰਗਾਂ */
+        @media (min-width: 768px) {
+            body { 
+                padding: 30px 10px; 
+            }
+            .app-container { 
+                max-width: 750px; 
+                padding: 30px; 
+            }
+            h2 { 
+                font-size: 24px; 
+                margin-bottom: 25px; 
+            }
+            .btn, .custom-file-upload {
+                padding: 12px 28px;
+                font-size: 16px;
+            }
+        }
     </style>
 </head>
 <body>
+
+<div id="install-banner" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2); padding: 12px 20px; border-radius: 30px; z-index: 10000; width: 90%; max-width: 400px; border: 1px solid #dee2e6; text-align: left; box-sizing: border-box;">
+    <span style="color: #333; font-weight: 600; font-size: 14px; line-height: 32px; float: left; margin-left: 5px;">Install HD Precision Crop?</span>
+    <div style="float: right;">
+        <button id="cancelInstallBtn" style="background: none; border: none; color: #6c757d; padding: 6px 10px; cursor: pointer; font-weight: 600; font-size: 14px;">Not Now</button>
+        <button id="acceptInstallBtn" style="background: #007bff; border: none; color: white; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 14px;">Install</button>
+    </div>
+    <div style="clear: both;"></div>
+</div>
 
 <div id="magnifier-container">
     <canvas id="magCanvas" width="200" height="200"></canvas>
@@ -228,6 +257,13 @@
                 ctx.lineWidth = Math.max(4, canvas.width * 0.005);
                 ctx.strokeStyle = 'white';
                 ctx.stroke();
+
+                // ਹੈਂਡਲਸ ਦੇ ਅੰਦਰ 1, 2, 3, 4 ਨੰਬਰ ਲਿਖਣਾ
+                ctx.fillStyle = 'white';
+                ctx.font = `bold ${Math.max(14, canvas.width * 0.018)}px system-ui, -apple-system, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i + 1, grabP.x, grabP.y);
             }
         }
     }
@@ -296,7 +332,7 @@
             let newX = pos.x + dragOffset.x;
             let newY = pos.y + dragOffset.y;
 
-            // ਹੈਂਡਲਸ ਨੂੰ ਫੋਟੋ (ਕੈਨਵਸ) ਦੇ ਕਿਨਾਰਿਆਂ ਤੱਕ ਸੀਮਤ ਕਰੋ
+            // ਹੈਂਡਲਸ ਨੂੰ ਫੋਟੋ (ਕੈਨਵਸ) ਦੇ ਕਿਨਾਰਿਆਂ ਤੱਕ ਸੀਮਤ ਕਰੋ (Edge to Edge)
             newX = Math.max(0, Math.min(newX, canvas.width));
             newY = Math.max(0, Math.min(newY, canvas.height));
 
@@ -315,6 +351,32 @@
             draw(); 
         }
     }
+
+    // ਕੰਪਿਊਟਰ ਸਕ੍ਰੀਨ 'ਤੇ ਮਾਊਂਸ ਹੌਵਰ (Hover) ਕਰਨ ਸਮੇਂ ਕਰਸਰ ਬਦਲਣਾ
+    canvas.addEventListener('mousemove', (e) => {
+        if (draggingPoint !== -1) return;
+        if (!sourceImage.src || points.length !== 4) return;
+        
+        const pos = getMousePos(e);
+        let innerHandles = getInnerHandles();
+        let hitRadius = Math.max(50, canvas.width * 0.06);
+        let hovering = false;
+        
+        for (let i = 0; i < 4; i++) {
+            const dx = innerHandles[i].x - pos.x;
+            const dy = innerHandles[i].y - pos.y;
+            if (Math.sqrt(dx*dx + dy*dy) < hitRadius * 1.5) {
+                hovering = true;
+                break;
+            }
+        }
+        
+        if (hovering) {
+            canvas.style.cursor = 'pointer';
+        } else {
+            canvas.style.cursor = 'crosshair';
+        }
+    });
 
     canvas.addEventListener('mousedown', startDrag);
     window.addEventListener('mousemove', drag);
@@ -390,6 +452,42 @@
 </script>
 
 <script>
+    let deferredPrompt;
+    const installBanner = document.getElementById('install-banner');
+    const acceptInstallBtn = document.getElementById('acceptInstallBtn');
+    const cancelInstallBtn = document.getElementById('cancelInstallBtn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // ਡਿਫੌਲਟ ਬ੍ਰਾਊਜ਼ਰ ਪ੍ਰੋਂਪਟ ਨੂੰ ਰੋਕੋ
+        e.preventDefault();
+        // ਇਵੈਂਟ ਨੂੰ ਸੇਵ ਕਰੋ
+        deferredPrompt = e;
+        // ਆਪਣਾ ਛੋਟਾ ਪੌਪ-ਅੱਪ ਬੈਨਰ ਦਿਖਾਓ
+        installBanner.style.display = 'block';
+    });
+
+    acceptInstallBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            installBanner.style.display = 'none';
+            // ਬ੍ਰਾਊਜ਼ਰ ਦਾ ਇੰਸਟਾਲ ਪ੍ਰੋਂਪਟ ਦਿਖਾਓ
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User choice: ${outcome}`);
+            deferredPrompt = null;
+        }
+    });
+
+    cancelInstallBtn.addEventListener('click', () => {
+        // ਪੌਪ-ਅੱਪ ਬੰਦ ਕਰੋ
+        installBanner.style.display = 'none';
+    });
+
+    window.addEventListener('appinstalled', () => {
+        console.log('App successfully installed!');
+        installBanner.style.display = 'none';
+    });
+
+    // ਸਰਵਿਸ ਵਰਕਰ ਰਜਿਸਟ੍ਰੇਸ਼ਨ
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js', { scope: './' })
